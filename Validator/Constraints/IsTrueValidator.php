@@ -125,7 +125,7 @@ class IsTrueValidator extends ConstraintValidator
     }
 
     /**
-     * Submits an HTTP POST to a reCAPTCHA server.
+     * Submits an HTTP POST to a reCAPTCHA server using Curl if it's available.
      *
      * @param string $host
      * @param string $path
@@ -137,9 +137,27 @@ class IsTrueValidator extends ConstraintValidator
     {
         $host = sprintf('%s%s?%s', $host, $path, http_build_query($data));
 
-        $context = $this->getResourceContext();
+        if (function_exists('curl_version')) {
+            $ch = curl_init();
 
-        return file_get_contents($host, false, $context);
+            curl_setopt($ch, CURLOPT_AUTOREFERER, TRUE);
+            curl_setopt($ch, CURLOPT_HEADER, 0);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+            curl_setopt($ch, CURLOPT_URL, $host);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, TRUE);
+
+            $response = curl_exec($ch);
+            curl_close($ch);
+
+        } else if (ini_get('allow_url_fopen')) {
+            $context = $this->getResourceContext();
+
+            $response = file_get_contents($host, false, $context);
+        } else {
+            throw new \Exception('Impossible to check ReCaptcha - you must have either Curl enabled or allow_url_fopen on in your .ini settings.');
+        }
+
+        return $response;
     }
 
     private function getResourceContext()
